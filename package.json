@@ -7,8 +7,8 @@
     "node": ">=24"
   },
   "scripts": {
-    "start": "node src/index.js",
-    "register": "node scripts/register-commands.js",
+    "start": "node --env-file-if-exists=.env src/index.js",
+    "register": "node --env-file-if-exists=.env scripts/register-commands.js",
     "test": "node --test \"test/*.test.js\""
   },
   "dependencies": {

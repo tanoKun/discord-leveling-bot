@@ -30,10 +30,27 @@ if (guildIds.length === 0) {
   console.log("registered global commands");
 } else {
   // ギルド登録は1ギルドずつ。指定された分だけ繰り返す(即時反映)
+  const failures = [];
+
   for (const guildId of guildIds) {
-    await rest.put(Routes.applicationGuildCommands(config.DISCORD_APPLICATION_ID, guildId), {
-      body
-    });
-    console.log(`registered guild commands for ${guildId}`);
+    try {
+      await rest.put(Routes.applicationGuildCommands(config.DISCORD_APPLICATION_ID, guildId), {
+        body
+      });
+      console.log(`registered guild commands for ${guildId}`);
+    } catch (error) {
+      // 1つ失敗しても残りの登録は続ける
+      const reason =
+        error?.code === 50001
+          ? "Missing Access (Botが参加していないか、applications.commands スコープ無しで招待されている)"
+          : (error?.message ?? String(error));
+
+      console.error(`failed to register guild commands for ${guildId}: ${reason}`);
+      failures.push(guildId);
+    }
+  }
+
+  if (failures.length > 0) {
+    process.exitCode = 1;
   }
 }
