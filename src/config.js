@@ -13,7 +13,17 @@ const schema = z.object({
   DISCORD_TOKEN: z.string().min(1),
   // Botの実行時には使わない(スラッシュコマンド登録スクリプトのみ必要)
   DISCORD_APPLICATION_ID: snowflake.optional(),
-  DISCORD_DEV_GUILD_ID: snowflake.optional(),
+  // カンマ区切りで複数指定できる(登録スクリプトのみ使用)
+  DISCORD_DEV_GUILD_ID: z
+    .string()
+    .optional()
+    .transform((value) =>
+      (value ?? "")
+        .split(",")
+        .map((id) => id.trim())
+        .filter((id) => id.length > 0)
+    )
+    .pipe(z.array(snowflake)),
 
   DATABASE_URL: z.string().min(1),
   // 未設定の場合は DATABASE_URL の sslmode から判断する

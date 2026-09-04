@@ -22,14 +22,18 @@ const body = [buildLevelCommand().toJSON()];
 
 const rest = new REST({ version: "10" }).setToken(config.DISCORD_TOKEN);
 
-const route = config.DISCORD_DEV_GUILD_ID
-  ? Routes.applicationGuildCommands(config.DISCORD_APPLICATION_ID, config.DISCORD_DEV_GUILD_ID)
-  : Routes.applicationCommands(config.DISCORD_APPLICATION_ID);
+const guildIds = config.DISCORD_DEV_GUILD_ID;
 
-await rest.put(route, { body });
-
-console.log(
-  config.DISCORD_DEV_GUILD_ID
-    ? `registered guild commands for ${config.DISCORD_DEV_GUILD_ID}`
-    : "registered global commands"
-);
+if (guildIds.length === 0) {
+  // グローバル登録(反映に時間がかかる)
+  await rest.put(Routes.applicationCommands(config.DISCORD_APPLICATION_ID), { body });
+  console.log("registered global commands");
+} else {
+  // ギルド登録は1ギルドずつ。指定された分だけ繰り返す(即時反映)
+  for (const guildId of guildIds) {
+    await rest.put(Routes.applicationGuildCommands(config.DISCORD_APPLICATION_ID, guildId), {
+      body
+    });
+    console.log(`registered guild commands for ${guildId}`);
+  }
+}

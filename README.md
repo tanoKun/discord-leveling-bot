@@ -27,7 +27,7 @@ npm run register       # スラッシュコマンド登録
 npm start
 ```
 
-`DISCORD_DEV_GUILD_ID` を設定すると、そのギルドにのみ即時反映でコマンドを登録する。
+`DISCORD_DEV_GUILD_ID` を設定すると、そのギルドにのみ即時反映でコマンドを登録する(カンマ区切りで複数指定可)。
 未設定の場合はグローバル登録(反映に時間がかかる)。
 
 マイグレーションは起動時に自動適用される(`migrations/*.sql`)。
@@ -38,7 +38,7 @@ npm start
 |---|---|---|
 | `DISCORD_TOKEN` | ✓ | Bot Token |
 | `DISCORD_APPLICATION_ID` | | Application ID（`npm run register` にのみ必要） |
-| `DISCORD_DEV_GUILD_ID` | | 開発用ギルドID(コマンド登録先) |
+| `DISCORD_DEV_GUILD_ID` | | コマンド登録先のギルドID(カンマ区切りで複数可) |
 | `DATABASE_URL` | ✓ | PostgreSQL接続URL |
 | `LEVEL_UP_NOTIFY` | | レベルアップ通知(既定 `true`) |
 | `LEVEL_UP_CHANNEL_ID` | | VC XPのレベルアップ通知先 |
