@@ -37,6 +37,24 @@ export function createFakeRepository() {
     return result;
   }
 
+  function rankBy(field, guildId, userId) {
+    const row = rows.get(key(guildId, userId));
+
+    if (!row) {
+      return null;
+    }
+
+    let rank = 1;
+
+    for (const other of rows.values()) {
+      if (other.guildId === guildId && other[field] > row[field]) {
+        rank += 1;
+      }
+    }
+
+    return rank;
+  }
+
   const repo = {
     rows,
 
@@ -63,23 +81,12 @@ export function createFakeRepository() {
       return { ...row, totalXp: row.textXp + row.voiceXp, exists: true };
     },
 
-    async getRank(guildId, userId) {
-      const row = rows.get(key(guildId, userId));
+    async getTextRank(guildId, userId) {
+      return rankBy("textXp", guildId, userId);
+    },
 
-      if (!row) {
-        return null;
-      }
-
-      const total = row.textXp + row.voiceXp;
-      let rank = 1;
-
-      for (const other of rows.values()) {
-        if (other.guildId === guildId && other.textXp + other.voiceXp > total) {
-          rank += 1;
-        }
-      }
-
-      return rank;
+    async getVoiceRank(guildId, userId) {
+      return rankBy("voiceXp", guildId, userId);
     },
 
     async grantTextXp(guildId, userId, { xp, cooldownSeconds, now = new Date() }) {
@@ -90,15 +97,15 @@ export function createFakeRepository() {
           return null;
         }
 
-        const totalXpBefore = row.textXp + row.voiceXp;
+        const xpBefore = row.textXp;
 
         row.textXp += BigInt(xp);
         row.nextTextXpAt = new Date(now.getTime() + cooldownSeconds * 1000);
 
         return {
           gainedXp: BigInt(xp),
-          totalXpBefore,
-          totalXpAfter: row.textXp + row.voiceXp,
+          xpBefore,
+          xpAfter: row.textXp,
           nextTextXpAt: row.nextTextXpAt
         };
       });
@@ -107,8 +114,6 @@ export function createFakeRepository() {
     async addVoiceSeconds(guildId, userId, seconds) {
       return serialize(async () => {
         const row = ensure(guildId, userId);
-        const totalXpBefore = row.textXp + row.voiceXp;
-
         const previousXp = row.voiceXp;
 
         row.voiceSeconds += Math.max(0, Math.floor(seconds));
@@ -117,8 +122,8 @@ export function createFakeRepository() {
         return {
           gainedXp: row.voiceXp - previousXp,
           voiceSeconds: row.voiceSeconds,
-          totalXpBefore,
-          totalXpAfter: row.textXp + row.voiceXp
+          xpBefore: previousXp,
+          xpAfter: row.voiceXp
         };
       });
     },

@@ -12,13 +12,14 @@ export function rollTextCooldownSeconds() {
   return randomInt(LEVEL_POLICY.textCooldownMinSeconds, LEVEL_POLICY.textCooldownMaxSeconds + 1);
 }
 
+// テキストとVCはレベルを共有しない。種別ごとのXPだけでレベルを判定する。
 function describeGain(result) {
   if (!result) {
     return null;
   }
 
-  const levelBefore = levelForTotalXp(result.totalXpBefore);
-  const levelAfter = levelForTotalXp(result.totalXpAfter);
+  const levelBefore = levelForTotalXp(result.xpBefore);
+  const levelAfter = levelForTotalXp(result.xpAfter);
 
   return {
     ...result,
@@ -49,15 +50,33 @@ export async function addVoiceSeconds(guildId, userId, seconds, { repo = reposit
   return describeGain(result);
 }
 
-/** `/level show` 用のプロフィール */
+function progressFor(xp, rank) {
+  const progress = levelProgress(xp);
+
+  return {
+    level: progress.level,
+    xp: progress.totalXp,
+    currentLevelXp: progress.currentLevelXp,
+    requiredLevelXp: progress.requiredLevelXp,
+    rank
+  };
+}
+
+/** `/level show` 用のプロフィール。テキストとVCをそれぞれ独立したレベルとして返す。 */
 export async function getProfile(guildId, userId, { repo = repository } = {}) {
   const member = (await repo.getMember(guildId, userId)) ?? repo.emptyMember(guildId, userId);
-  const rank = member.exists ? await repo.getRank(guildId, userId) : null;
+
+  const [textRank, voiceRank] = member.exists
+    ? await Promise.all([repo.getTextRank(guildId, userId), repo.getVoiceRank(guildId, userId)])
+    : [null, null];
 
   return {
     member,
-    rank,
-    ...levelProgress(member.totalXp)
+    text: progressFor(member.textXp, textRank),
+    voice: {
+      ...progressFor(member.voiceXp, voiceRank),
+      seconds: member.voiceSeconds
+    }
   };
 }
 

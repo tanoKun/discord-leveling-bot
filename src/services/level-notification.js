@@ -22,13 +22,16 @@ function canSend(channel) {
   );
 }
 
-function buildContent(userId, level) {
-  return `🎉 <@${userId}> が Level ${level} になりました！`;
+export const TEXT_LABEL = "テキストレベル";
+export const VOICE_LABEL = "ボイスレベル";
+
+function buildContent(userId, label, level) {
+  return `🎉 <@${userId}> が ${label} ${level} になりました！`;
 }
 
-async function send(channel, userId, level) {
+async function send(channel, userId, label, level) {
   await channel.send({
-    content: buildContent(userId, level),
+    content: buildContent(userId, label, level),
     allowedMentions: { users: [userId] }
   });
 }
@@ -43,7 +46,7 @@ export async function notifyTextLevelUp(channel, userId, level) {
   }
 
   try {
-    await send(channel, userId, level);
+    await send(channel, userId, TEXT_LABEL, level);
     return true;
   } catch (error) {
     // 通知失敗でXPはロールバックしない
@@ -77,7 +80,7 @@ export async function notifyVoiceLevelUp(guild, userId, level) {
     }
 
     try {
-      await send(channel, userId, level);
+      await send(channel, userId, VOICE_LABEL, level);
       return true;
     } catch (error) {
       logger.warn("failed to send voice level up notification", error);

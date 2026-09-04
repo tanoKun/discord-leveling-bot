@@ -1,11 +1,12 @@
 # Discord Level Bot
 
 ProBot風のテンポでレベルが上がる、軽量なDiscord Level Bot。
+テキストとボイスはそれぞれ独立したレベルとして扱う。
 
 - チャットXP(15〜25 XP / 55〜75秒のCooldown)
-- VC滞在XP(チャットとは別式。VCのみで Level 1 に約10時間、Level 10 に約150時間)
+- VC滞在XP(チャットとは別のレベル・別の式。VCのみで Level 1 に約10時間、Level 10 に約150時間)
 - ProBot風レベルカーブ `T(L) = floor(32.8739 * L^2 + 19.3492 * L)`
-- `/level show [player]` — PNGランクカード(失敗時はEmbedへフォールバック)
+- `/level show [player]` — PNGランクカードにテキスト/ボイス両方のレベルとランクを表示(失敗時はEmbedへフォールバック)
 - `/level reset <player>` — Manage Server 権限 + 30秒の確認ボタン
 - レベルアップ通知
 

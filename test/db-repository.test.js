@@ -43,7 +43,7 @@ describe("member-repository (postgres)", { skip: TEST_DATABASE_URL ? false : "TE
     const result = await repo.grantTextXp(GUILD, "u1", { xp: 21, cooldownSeconds: 60, now });
 
     assert.equal(result.gainedXp, 21n);
-    assert.equal(result.totalXpAfter, 21n);
+    assert.equal(result.xpAfter, 21n);
 
     const member = await repo.getMember(GUILD, "u1");
     assert.equal(member.textXp, 21n);
@@ -74,7 +74,7 @@ describe("member-repository (postgres)", { skip: TEST_DATABASE_URL ? false : "TE
     });
 
     assert.ok(after);
-    assert.equal(after.totalXpAfter, 40n);
+    assert.equal(after.xpAfter, 40n);
   });
 
   it("does not double grant on concurrent messages", async () => {
@@ -113,13 +113,30 @@ describe("member-repository (postgres)", { skip: TEST_DATABASE_URL ? false : "TE
     assert.ok(member.voiceXp >= 52n);
   });
 
-  it("ranks by total xp", async () => {
-    await repo.addVoiceSeconds(GUILD, "low", 3600);
-    await repo.addVoiceSeconds(GUILD, "high", 36000);
+  it("ranks text and voice separately", async () => {
+    await repo.grantTextXp(GUILD, "chatter", { xp: 500, cooldownSeconds: 60 });
+    await repo.addVoiceSeconds(GUILD, "talker", 36000);
 
-    assert.equal(await repo.getRank(GUILD, "high"), 1);
-    assert.equal(await repo.getRank(GUILD, "low"), 2);
-    assert.equal(await repo.getRank(GUILD, "missing"), null);
+    assert.equal(await repo.getTextRank(GUILD, "chatter"), 1);
+    assert.equal(await repo.getTextRank(GUILD, "talker"), 2);
+    assert.equal(await repo.getVoiceRank(GUILD, "talker"), 1);
+    assert.equal(await repo.getVoiceRank(GUILD, "chatter"), 2);
+
+    assert.equal(await repo.getTextRank(GUILD, "missing"), null);
+    assert.equal(await repo.getVoiceRank(GUILD, "missing"), null);
+  });
+
+  it("keeps text and voice xp independent", async () => {
+    const text = await repo.grantTextXp(GUILD, "u1", { xp: 100, cooldownSeconds: 60 });
+
+    assert.equal(text.xpBefore, 0n);
+    assert.equal(text.xpAfter, 100n);
+
+    const voice = await repo.addVoiceSeconds(GUILD, "u1", 36000);
+
+    // VC側の before/after にテキストXPは混ざらない
+    assert.equal(voice.xpBefore, 0n);
+    assert.equal(voice.xpAfter, voiceXpForSeconds(36000));
   });
 
   it("resets every stored value", async () => {

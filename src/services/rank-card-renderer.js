@@ -63,21 +63,84 @@ async function fetchAvatar(avatarUrl) {
   return loadImage(Buffer.from(await response.arrayBuffer()));
 }
 
+/** 秒数を "12h 30m" のような表記にする */
+export function formatDuration(seconds) {
+  const total = Math.max(0, Math.floor(Number(seconds)));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+
+  return hours > 0 ? `${formatNumber(hours)}h ${minutes}m` : `${minutes}m`;
+}
+
+function drawTrack(ctx, x, y, width, height, ratio) {
+  ctx.fillStyle = COLORS.track;
+  roundedRect(ctx, x, y, width, height, height / 2);
+  ctx.fill();
+
+  if (ratio <= 0) {
+    return;
+  }
+
+  const fillWidth = Math.max(height, width * ratio);
+  const gradient = ctx.createLinearGradient(x, y, x + fillWidth, y);
+  gradient.addColorStop(0, COLORS.accent);
+  gradient.addColorStop(1, COLORS.accentSoft);
+
+  ctx.fillStyle = gradient;
+  roundedRect(ctx, x, y, fillWidth, height, height / 2);
+  ctx.fill();
+}
+
+/**
+ * 1種類分(テキスト or VC)の行を描画する。
+ */
+function drawSection(ctx, { label, note, progress, x, y, width }) {
+  const { level, currentLevelXp, requiredLevelXp, rank } = progress;
+
+  const required = Number(requiredLevelXp);
+  const current = Number(currentLevelXp);
+  const ratio = required > 0 ? Math.min(1, Math.max(0, current / required)) : 0;
+
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
+
+  ctx.font = font(22, "700");
+  ctx.fillStyle = COLORS.muted;
+  ctx.fillText(label, x, y);
+
+  ctx.font = font(30, "700");
+  ctx.fillStyle = COLORS.text;
+  ctx.fillText(`LEVEL ${formatNumber(level)}`, x + 90, y + 2);
+
+  if (note) {
+    ctx.font = font(20, "600");
+    ctx.fillStyle = COLORS.muted;
+    ctx.fillText(note, x + 240, y);
+  }
+
+  ctx.textAlign = "right";
+  ctx.font = font(24, "700");
+  ctx.fillStyle = COLORS.accentSoft;
+  ctx.fillText(rank === null || rank === undefined ? "#-" : `#${formatNumber(rank)}`, x + width, y);
+
+  drawTrack(ctx, x, y + 16, width, 20, ratio);
+
+  ctx.textAlign = "right";
+  ctx.font = font(20, "600");
+  ctx.fillStyle = COLORS.muted;
+  ctx.fillText(
+    `${formatNumber(currentLevelXp)} / ${formatNumber(requiredLevelXp)} XP`,
+    x + width,
+    y + 54
+  );
+}
+
 /**
  * ランクカードPNGを生成する。
+ * テキストとVCのレベルをそれぞれ表示する。
  * 失敗した場合は例外を投げる(呼び出し側でEmbedへフォールバックする)。
  */
-export async function renderRankCard({
-  displayName,
-  avatarUrl,
-  level,
-  rank,
-  currentLevelXp,
-  requiredLevelXp,
-  totalXp,
-  textXp,
-  voiceXp
-}) {
+export async function renderRankCard({ displayName, avatarUrl, text, voice }) {
   const canvas = createCanvas(CARD_WIDTH, CARD_HEIGHT);
   const ctx = canvas.getContext("2d");
 
@@ -93,9 +156,9 @@ export async function renderRankCard({
   ctx.fill();
 
   // アバター
-  const avatarSize = 160;
-  const avatarX = 56;
-  const avatarY = (CARD_HEIGHT - avatarSize) / 2;
+  const avatarSize = 140;
+  const avatarX = 52;
+  const avatarY = 56;
 
   const avatar = await fetchAvatar(avatarUrl);
 
@@ -113,75 +176,34 @@ export async function renderRankCard({
   ctx.arc(avatarX + avatarSize / 2, avatarY + avatarSize / 2, avatarSize / 2 + 3, 0, Math.PI * 2);
   ctx.stroke();
 
-  const contentX = avatarX + avatarSize + 40;
-  const contentRight = CARD_WIDTH - 56;
-
-  // ランク(右上)
-  const rankText = rank === null || rank === undefined ? "RANK -" : `RANK #${formatNumber(rank)}`;
-  ctx.font = font(34, "700");
-  ctx.fillStyle = COLORS.accentSoft;
-  ctx.textAlign = "right";
-  ctx.textBaseline = "alphabetic";
-  ctx.fillText(rankText, contentRight, 78);
-  const rankWidth = ctx.measureText(rankText).width;
+  const contentX = avatarX + avatarSize + 36;
+  const contentRight = CARD_WIDTH - 52;
+  const contentWidth = contentRight - contentX;
 
   // 表示名
   ctx.textAlign = "left";
-  ctx.font = font(40, "700");
+  ctx.textBaseline = "alphabetic";
+  ctx.font = font(38, "700");
   ctx.fillStyle = COLORS.text;
-  ctx.fillText(fitText(ctx, displayName, contentRight - rankWidth - 24 - contentX), contentX, 78);
+  ctx.fillText(fitText(ctx, displayName, contentWidth), contentX, 72);
 
-  // レベル
-  ctx.font = font(30, "700");
-  ctx.fillStyle = COLORS.muted;
-  ctx.fillText(`LEVEL ${formatNumber(level)}`, contentX, 128);
+  drawSection(ctx, {
+    label: "TEXT",
+    note: `${formatNumber(text.xp)} XP`,
+    progress: text,
+    x: contentX,
+    y: 124,
+    width: contentWidth
+  });
 
-  // 進捗バー
-  const barX = contentX;
-  const barY = 150;
-  const barWidth = contentRight - contentX;
-  const barHeight = 26;
-
-  const required = Number(requiredLevelXp);
-  const current = Number(currentLevelXp);
-  const ratio = required > 0 ? Math.min(1, Math.max(0, current / required)) : 0;
-
-  ctx.fillStyle = COLORS.track;
-  roundedRect(ctx, barX, barY, barWidth, barHeight, barHeight / 2);
-  ctx.fill();
-
-  if (ratio > 0) {
-    const fillWidth = Math.max(barHeight, barWidth * ratio);
-    const gradient = ctx.createLinearGradient(barX, barY, barX + fillWidth, barY);
-    gradient.addColorStop(0, COLORS.accent);
-    gradient.addColorStop(1, COLORS.accentSoft);
-
-    ctx.fillStyle = gradient;
-    roundedRect(ctx, barX, barY, fillWidth, barHeight, barHeight / 2);
-    ctx.fill();
-  }
-
-  ctx.font = font(24, "600");
-  ctx.fillStyle = COLORS.muted;
-  ctx.textAlign = "right";
-  ctx.fillText(
-    `${formatNumber(currentLevelXp)} / ${formatNumber(requiredLevelXp)} XP`,
-    contentRight,
-    barY + barHeight + 34
-  );
-
-  ctx.textAlign = "left";
-  ctx.fillStyle = COLORS.text;
-  ctx.font = font(26, "700");
-  ctx.fillText(`TOTAL ${formatNumber(totalXp)} XP`, contentX, barY + barHeight + 34);
-
-  ctx.fillStyle = COLORS.muted;
-  ctx.font = font(22, "600");
-  ctx.fillText(
-    `TEXT ${formatNumber(textXp)} / VOICE ${formatNumber(voiceXp)}`,
-    contentX,
-    barY + barHeight + 70
-  );
+  drawSection(ctx, {
+    label: "VOICE",
+    note: formatDuration(voice.seconds),
+    progress: voice,
+    x: contentX,
+    y: 214,
+    width: contentWidth
+  });
 
   return canvas.encode("png");
 }

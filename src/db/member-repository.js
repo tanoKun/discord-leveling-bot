@@ -69,14 +69,14 @@ export async function getMember(guildId, userId) {
 
 /**
  * ギルド内順位。1位が 1。
- * データが存在しない場合は null。
+ * テキストとVCで別々に集計する。データが存在しない場合は null。
  */
-export async function getRank(guildId, userId) {
+async function rankBy(column, guildId, userId) {
   const result = await pool.query(
     `SELECT 1 + (
        SELECT COUNT(*) FROM level_members other
        WHERE other.guild_id = target.guild_id
-         AND (other.text_xp + other.voice_xp) > (target.text_xp + target.voice_xp)
+         AND other.${column} > target.${column}
      ) AS rank
      FROM level_members target
      WHERE target.guild_id = $1 AND target.user_id = $2`,
@@ -88,6 +88,14 @@ export async function getRank(guildId, userId) {
   }
 
   return Number(result.rows[0].rank);
+}
+
+export function getTextRank(guildId, userId) {
+  return rankBy("text_xp", guildId, userId);
+}
+
+export function getVoiceRank(guildId, userId) {
+  return rankBy("voice_xp", guildId, userId);
 }
 
 /**
@@ -118,8 +126,8 @@ export async function grantTextXp(guildId, userId, { xp, cooldownSeconds, now = 
 
     return {
       gainedXp: BigInt(xp),
-      totalXpBefore: member.totalXp,
-      totalXpAfter: updated.totalXp,
+      xpBefore: member.textXp,
+      xpAfter: updated.textXp,
       nextTextXpAt: nextAt
     };
   });
@@ -151,8 +159,8 @@ export async function addVoiceSeconds(guildId, userId, seconds) {
     return {
       gainedXp: voiceXp - member.voiceXp,
       voiceSeconds: totalSeconds,
-      totalXpBefore: member.totalXp,
-      totalXpAfter: updated.totalXp
+      xpBefore: member.voiceXp,
+      xpAfter: updated.voiceXp
     };
   });
 }

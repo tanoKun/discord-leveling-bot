@@ -48,13 +48,30 @@ function createShowInteraction({ caller, player = null, playerMember = null }) {
   };
 }
 
-function profileFor({ textXp = 0n, voiceXp = 0n, rank = null, exists = true } = {}) {
-  const totalXp = textXp + voiceXp;
+function section(xp, rank) {
+  const progress = levelProgress(xp);
 
   return {
-    member: { textXp, voiceXp, totalXp, exists },
-    rank,
-    ...levelProgress(totalXp)
+    level: progress.level,
+    xp: progress.totalXp,
+    currentLevelXp: progress.currentLevelXp,
+    requiredLevelXp: progress.requiredLevelXp,
+    rank
+  };
+}
+
+function profileFor({
+  textXp = 0n,
+  voiceXp = 0n,
+  voiceSeconds = 0,
+  textRank = null,
+  voiceRank = null,
+  exists = true
+} = {}) {
+  return {
+    member: { textXp, voiceXp, voiceSeconds, totalXp: textXp + voiceXp, exists },
+    text: section(textXp, textRank),
+    voice: { ...section(voiceXp, voiceRank), seconds: voiceSeconds }
   };
 }
 
@@ -66,7 +83,14 @@ describe("/level show", () => {
     let renderedWith = null;
 
     await levelShow.execute(interaction, {
-      getProfile: async () => profileFor({ textXp: 3100n, voiceXp: 1100n, rank: 4 }),
+      getProfile: async () =>
+        profileFor({
+          textXp: 3100n,
+          voiceXp: 1100n,
+          voiceSeconds: 42 * 3600,
+          textRank: 4,
+          voiceRank: 7
+        }),
       renderRankCard: async (options) => {
         renderedWith = options;
         return Buffer.from("png");
@@ -78,9 +102,14 @@ describe("/level show", () => {
     const reply = interaction.state.replies.at(-1);
     assert.equal(reply.files.length, 1);
     assert.equal(reply.files[0].name, "rank-card.png");
-    assert.equal(renderedWith.level, 11);
-    assert.equal(renderedWith.rank, 4);
     assert.equal(renderedWith.displayName, "user-u1 (nick)");
+
+    // テキストとVCはそれぞれ独立したレベルとして渡される
+    assert.equal(renderedWith.text.level, 9);
+    assert.equal(renderedWith.text.rank, 4);
+    assert.equal(renderedWith.voice.level, 5);
+    assert.equal(renderedWith.voice.rank, 7);
+    assert.equal(renderedWith.voice.seconds, 42 * 3600);
   });
 
   it("renders another player when given", async () => {
@@ -100,7 +129,7 @@ describe("/level show", () => {
     await levelShow.execute(interaction, {
       getProfile: async (guildId, userId) => {
         requested.push([guildId, userId]);
-        return profileFor({ textXp: 100n, rank: 9 });
+        return profileFor({ textXp: 100n, textRank: 9 });
       },
       renderRankCard: async () => Buffer.from("png")
     });
@@ -120,10 +149,15 @@ describe("/level show", () => {
     });
 
     const embed = interaction.state.replies.at(-1).embeds[0].data;
+    const [text, voice] = embed.fields;
 
-    assert.match(embed.description, /Level 0/);
-    assert.match(embed.description, /0 \/ 52 XP/);
-    assert.match(embed.description, /Rank -/);
+    assert.equal(text.name, "テキスト");
+    assert.match(text.value, /Level 0/);
+    assert.match(text.value, /0 \/ 52 XP/);
+    assert.match(text.value, /Rank -/);
+    assert.equal(voice.name, "ボイス");
+    assert.match(voice.value, /Level 0/);
+    assert.match(voice.value, /滞在 0m/);
   });
 
   it("rejects bots", async () => {
@@ -152,7 +186,14 @@ describe("/level show", () => {
     const interaction = createShowInteraction({ caller });
 
     await levelShow.execute(interaction, {
-      getProfile: async () => profileFor({ textXp: 3100n, voiceXp: 1100n, rank: 4 }),
+      getProfile: async () =>
+        profileFor({
+          textXp: 3100n,
+          voiceXp: 1100n,
+          voiceSeconds: 42 * 3600,
+          textRank: 4,
+          voiceRank: 7
+        }),
       renderRankCard: async () => {
         throw new Error("png encode failed");
       }
@@ -160,18 +201,14 @@ describe("/level show", () => {
 
     const reply = interaction.state.replies.at(-1);
     const embed = reply.embeds[0].data;
+    const [text, voice] = embed.fields;
 
     assert.equal(reply.files, undefined);
-    assert.match(embed.description, /Level 11/);
-    assert.match(embed.description, /Rank #4/);
-    assert.deepEqual(
-      embed.fields.map((field) => [field.name, field.value]),
-      [
-        ["Total XP", "4,200"],
-        ["Text XP", "3,100"],
-        ["Voice XP", "1,100"]
-      ]
-    );
+    assert.match(text.value, /Level 9/);
+    assert.match(text.value, /Rank #4/);
+    assert.match(voice.value, /Level 5/);
+    assert.match(voice.value, /Rank #7/);
+    assert.match(voice.value, /滞在 42h 0m/);
   });
 
   it("draws a progress bar", () => {
@@ -378,19 +415,32 @@ describe("getProfile", () => {
     const repo = createFakeRepository();
     const profile = await getProfile(GUILD, "unknown", { repo });
 
-    assert.equal(profile.level, 0);
-    assert.equal(profile.rank, null);
-    assert.equal(profile.currentLevelXp, 0n);
-    assert.equal(profile.requiredLevelXp, 52n);
+    for (const part of [profile.text, profile.voice]) {
+      assert.equal(part.level, 0);
+      assert.equal(part.rank, null);
+      assert.equal(part.currentLevelXp, 0n);
+      assert.equal(part.requiredLevelXp, 52n);
+    }
   });
 
-  it("ranks members by total xp", async () => {
+  it("ranks text and voice separately", async () => {
     const repo = createFakeRepository();
 
-    await repo.addVoiceSeconds(GUILD, "low", 3600);
-    await repo.addVoiceSeconds(GUILD, "high", 36000);
+    // チャットだけの人とVCだけの人。順位はそれぞれの種別で決まる
+    await repo.grantTextXp(GUILD, "chatter", { xp: 500, cooldownSeconds: 60 });
+    await repo.addVoiceSeconds(GUILD, "talker", 200 * 3600);
 
-    assert.equal((await getProfile(GUILD, "high", { repo })).rank, 1);
-    assert.equal((await getProfile(GUILD, "low", { repo })).rank, 2);
+    const chatter = await getProfile(GUILD, "chatter", { repo });
+    const talker = await getProfile(GUILD, "talker", { repo });
+
+    assert.equal(chatter.text.rank, 1);
+    assert.equal(chatter.voice.rank, 2);
+    assert.equal(talker.voice.rank, 1);
+    assert.equal(talker.text.rank, 2);
+
+    // 片方のXPはもう片方のレベルに影響しない
+    assert.equal(chatter.voice.level, 0);
+    assert.equal(talker.text.level, 0);
+    assert.ok(talker.voice.level >= 10);
   });
 });

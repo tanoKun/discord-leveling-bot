@@ -5,7 +5,7 @@ import {
 } from "discord.js";
 
 import { logger } from "../../logger.js";
-import { renderRankCard } from "../../services/rank-card-renderer.js";
+import { formatDuration, renderRankCard } from "../../services/rank-card-renderer.js";
 import { getProfile } from "../../services/xp-service.js";
 
 export const name = "show";
@@ -32,25 +32,24 @@ function formatNumber(value) {
   return Number(value).toLocaleString("en-US");
 }
 
-export function buildFallbackEmbed({ displayName, avatarUrl, rank, profile }) {
-  const { level, currentLevelXp, requiredLevelXp, member } = profile;
+export function buildFallbackEmbed({ displayName, avatarUrl, profile }) {
+  const line = ({ level, currentLevelXp, requiredLevelXp, rank }) =>
+    [
+      `**Level ${formatNumber(level)}** ・ Rank ${rank === null ? "-" : `#${formatNumber(rank)}`}`,
+      progressBar(currentLevelXp, requiredLevelXp),
+      `${formatNumber(currentLevelXp)} / ${formatNumber(requiredLevelXp)} XP`
+    ].join("\n");
 
   return new EmbedBuilder()
     .setColor(0x5865f2)
     .setAuthor({ name: displayName, iconURL: avatarUrl })
-    .setDescription(
-      [
-        `**Level ${formatNumber(level)}**`,
-        `Rank ${rank === null ? "-" : `#${formatNumber(rank)}`}`,
-        "",
-        progressBar(currentLevelXp, requiredLevelXp),
-        `${formatNumber(currentLevelXp)} / ${formatNumber(requiredLevelXp)} XP`
-      ].join("\n")
-    )
     .addFields(
-      { name: "Total XP", value: formatNumber(member.totalXp), inline: true },
-      { name: "Text XP", value: formatNumber(member.textXp), inline: true },
-      { name: "Voice XP", value: formatNumber(member.voiceXp), inline: true }
+      { name: "テキスト", value: line(profile.text), inline: true },
+      {
+        name: "ボイス",
+        value: `${line(profile.voice)}\n滞在 ${formatDuration(profile.voice.seconds)}`,
+        inline: true
+      }
     );
 }
 
@@ -80,13 +79,8 @@ export async function execute(interaction, deps = {}) {
     const png = await renderCard({
       displayName,
       avatarUrl,
-      level: profile.level,
-      rank: profile.rank,
-      currentLevelXp: profile.currentLevelXp,
-      requiredLevelXp: profile.requiredLevelXp,
-      totalXp: profile.member.totalXp,
-      textXp: profile.member.textXp,
-      voiceXp: profile.member.voiceXp
+      text: profile.text,
+      voice: profile.voice
     });
 
     const attachment = new AttachmentBuilder(png, { name: "rank-card.png" });
@@ -97,14 +91,7 @@ export async function execute(interaction, deps = {}) {
     logger.warn("rank card rendering failed, falling back to embed", error);
 
     await interaction.editReply({
-      embeds: [
-        buildFallbackEmbed({
-          displayName,
-          avatarUrl,
-          rank: profile.rank,
-          profile
-        })
-      ]
+      embeds: [buildFallbackEmbed({ displayName, avatarUrl, profile })]
     });
   }
 }
