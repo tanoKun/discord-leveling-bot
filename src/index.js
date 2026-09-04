@@ -26,7 +26,17 @@ const voiceTracker = new VoiceTracker({
 client.voiceTracker = voiceTracker;
 
 client.once(Events.ClientReady, async (readyClient) => {
-  logger.info(`logged in as ${readyClient.user.tag}`);
+  const guildCount = readyClient.guilds.cache.size;
+
+  logger.info(`logged in as ${readyClient.user.tag} (guilds: ${guildCount})`);
+
+  if (guildCount === 0) {
+    // applications.commands だけで承認されている場合、コマンドは動くが
+    // messageCreate / voiceStateUpdate は届かないためXPが一切入らない
+    logger.warn(
+      "not a member of any guild. invite the bot with the 'bot' scope, otherwise no xp will be granted"
+    );
+  }
 
   for (const guild of readyClient.guilds.cache.values()) {
     await voiceTracker.syncGuild(guild).catch((error) =>
