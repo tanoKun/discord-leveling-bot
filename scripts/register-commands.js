@@ -13,6 +13,11 @@ export function buildLevelCommand() {
     .addSubcommand(levelReset.data);
 }
 
+if (!config.DISCORD_APPLICATION_ID) {
+  console.error("DISCORD_APPLICATION_ID is required to register commands");
+  process.exit(1);
+}
+
 const body = [buildLevelCommand().toJSON()];
 
 const rest = new REST({ version: "10" }).setToken(config.DISCORD_TOKEN);

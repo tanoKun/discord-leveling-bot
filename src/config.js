@@ -11,7 +11,8 @@ const snowflake = z.string().regex(/^\d{17,20}$/, "must be a Discord snowflake")
 
 const schema = z.object({
   DISCORD_TOKEN: z.string().min(1),
-  DISCORD_APPLICATION_ID: snowflake,
+  // Botの実行時には使わない(スラッシュコマンド登録スクリプトのみ必要)
+  DISCORD_APPLICATION_ID: snowflake.optional(),
   DISCORD_DEV_GUILD_ID: snowflake.optional(),
 
   DATABASE_URL: z.string().min(1),

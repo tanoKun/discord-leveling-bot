@@ -37,7 +37,7 @@ npm start
 | 変数 | 必須 | 説明 |
 |---|---|---|
 | `DISCORD_TOKEN` | ✓ | Bot Token |
-| `DISCORD_APPLICATION_ID` | ✓ | Application ID |
+| `DISCORD_APPLICATION_ID` | | Application ID（`npm run register` にのみ必要） |
 | `DISCORD_DEV_GUILD_ID` | | 開発用ギルドID(コマンド登録先) |
 | `DATABASE_URL` | ✓ | PostgreSQL接続URL |
 | `LEVEL_UP_NOTIFY` | | レベルアップ通知(既定 `true`) |
@@ -63,7 +63,7 @@ TEST_DATABASE_URL=postgres://postgres:test@localhost:55432/levelbot npm test
 1. PostgreSQL アドオンを作成する
 2. このリポジトリを連携し、Dockerfile からビルドする Service を作成する
 3. Instances は **1** のまま(複数プロセスは想定していない)
-4. `DISCORD_TOKEN` / `DISCORD_APPLICATION_ID` / `DATABASE_URL` をSecretとして登録する
+4. `DISCORD_TOKEN` と `DATABASE_URL` をSecretとして登録する
 5. ヘルスチェックは `GET /`(`PORT`)
 
 ## XP調整
