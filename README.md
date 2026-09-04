@@ -3,7 +3,7 @@
 ProBot風のテンポでレベルが上がる、軽量なDiscord Level Bot。
 
 - チャットXP(15〜25 XP / 55〜75秒のCooldown)
-- VC滞在XP(有効滞在 300秒ごとに 5 XP)
+- VC滞在XP(有効滞在 300秒ごとに 3 XP)
 - ProBot風レベルカーブ `T(L) = floor(32.8739 * L^2 + 19.3492 * L)`
 - `/level show [player]` — PNGランクカード(失敗時はEmbedへフォールバック)
 - `/level reset <player>` — Manage Server 権限 + 30秒の確認ボタン
