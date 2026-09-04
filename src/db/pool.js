@@ -10,7 +10,16 @@ import { logger } from "../logger.js";
 // BIGINT(int8) は精度を落とさないため文字列で受け取る(pg既定)。
 // TIMESTAMPTZ は Date のままで良い。
 
-function sslOptionFor(connectionString) {
+function sslOptionFor(connectionString, forced) {
+  // DATABASE_SSL を明示した場合はそれに従う
+  if (forced === true) {
+    return { rejectUnauthorized: false };
+  }
+
+  if (forced === false) {
+    return undefined;
+  }
+
   if (/[?&]sslmode=(require|verify-ca|verify-full)/.test(connectionString)) {
     return { rejectUnauthorized: false };
   }
@@ -20,7 +29,7 @@ function sslOptionFor(connectionString) {
 
 export const pool = new pg.Pool({
   connectionString: config.DATABASE_URL,
-  ssl: sslOptionFor(config.DATABASE_URL),
+  ssl: sslOptionFor(config.DATABASE_URL, config.DATABASE_SSL),
   max: 10,
   idleTimeoutMillis: 30_000
 });

@@ -15,6 +15,8 @@ const schema = z.object({
   DISCORD_DEV_GUILD_ID: snowflake.optional(),
 
   DATABASE_URL: z.string().min(1),
+  // 未設定の場合は DATABASE_URL の sslmode から判断する
+  DATABASE_SSL: booleanish.optional(),
 
   LEVEL_UP_NOTIFY: booleanish,
   LEVEL_UP_CHANNEL_ID: snowflake.optional(),
