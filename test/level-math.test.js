@@ -7,6 +7,9 @@ import {
   splitVoiceSeconds,
   totalXpForLevel
 } from "../src/domain/level-math.js";
+import { LEVEL_POLICY } from "../src/domain/level-policy.js";
+
+const XP_PER_TICK = LEVEL_POLICY.voiceXpPerTick;
 
 describe("totalXpForLevel", () => {
   it("matches the spec table", () => {
@@ -65,7 +68,7 @@ describe("levelProgress", () => {
 });
 
 describe("splitVoiceSeconds", () => {
-  it("299 seconds => 0 xp", () => {
+  it("299 seconds => no tick", () => {
     assert.deepEqual(splitVoiceSeconds(0, 299), {
       ticks: 0,
       gainedXp: 0,
@@ -73,18 +76,18 @@ describe("splitVoiceSeconds", () => {
     });
   });
 
-  it("300 seconds => 10 xp", () => {
+  it("300 seconds => 1 tick", () => {
     assert.deepEqual(splitVoiceSeconds(0, 300), {
       ticks: 1,
-      gainedXp: 10,
+      gainedXp: XP_PER_TICK,
       remainderSeconds: 0
     });
   });
 
-  it("601 seconds => 20 xp with remainder 1", () => {
+  it("601 seconds => 2 ticks with remainder 1", () => {
     assert.deepEqual(splitVoiceSeconds(0, 601), {
       ticks: 2,
-      gainedXp: 20,
+      gainedXp: XP_PER_TICK * 2,
       remainderSeconds: 1
     });
   });
@@ -92,7 +95,7 @@ describe("splitVoiceSeconds", () => {
   it("keeps the stored remainder", () => {
     assert.deepEqual(splitVoiceSeconds(299, 1), {
       ticks: 1,
-      gainedXp: 10,
+      gainedXp: XP_PER_TICK,
       remainderSeconds: 0
     });
   });

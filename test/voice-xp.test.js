@@ -3,10 +3,13 @@ import { describe, it } from "node:test";
 
 import "./helpers/env.js";
 
+import { LEVEL_POLICY } from "../src/domain/level-policy.js";
 import { addVoiceSeconds } from "../src/services/xp-service.js";
 import { VoiceTracker, isEligibleVoiceState } from "../src/services/voice-tracker.js";
 import { createChannel, createGuild, joinChannel, leaveChannel } from "./helpers/fake-discord.js";
 import { createFakeRepository } from "./helpers/fake-repository.js";
+
+const XP_PER_TICK = BigInt(LEVEL_POLICY.voiceXpPerTick);
 
 function createXpStub(repo) {
   return {
@@ -126,7 +129,7 @@ describe("VoiceTracker", () => {
     assert.equal(await repo.getMember("guild-1", "u1"), null);
   });
 
-  it("300 seconds => 10 xp", async () => {
+  it("300 seconds => 1 tick of xp", async () => {
     const { repo, clock, tracker } = setup();
     await joinPair(tracker);
 
@@ -134,11 +137,11 @@ describe("VoiceTracker", () => {
     await tracker.checkpointAll();
 
     const member = await repo.getMember("guild-1", "u1");
-    assert.equal(member.voiceXp, 10n);
+    assert.equal(member.voiceXp, XP_PER_TICK);
     assert.equal(member.voiceRemainderSeconds, 0);
   });
 
-  it("601 seconds => 20 xp and remainder 1", async () => {
+  it("601 seconds => 2 ticks of xp and remainder 1", async () => {
     const { repo, clock, tracker } = setup();
     await joinPair(tracker);
 
@@ -146,7 +149,7 @@ describe("VoiceTracker", () => {
     await tracker.checkpointAll();
 
     const member = await repo.getMember("guild-1", "u1");
-    assert.equal(member.voiceXp, 20n);
+    assert.equal(member.voiceXp, XP_PER_TICK * 2n);
     assert.equal(member.voiceRemainderSeconds, 1);
   });
 
@@ -160,7 +163,7 @@ describe("VoiceTracker", () => {
     }
 
     const member = await repo.getMember("guild-1", "u1");
-    assert.equal(member.voiceXp, 10n);
+    assert.equal(member.voiceXp, XP_PER_TICK);
   });
 
   it("does not accumulate while alone", async () => {

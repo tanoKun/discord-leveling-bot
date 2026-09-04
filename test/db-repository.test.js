@@ -3,6 +3,8 @@ import { after, before, beforeEach, describe, it } from "node:test";
 
 import "./helpers/env.js";
 
+import { LEVEL_POLICY } from "../src/domain/level-policy.js";
+
 /**
  * 実際のPostgreSQLに対する統合テスト。
  * TEST_DATABASE_URL が設定されている場合のみ実行する。
@@ -89,16 +91,18 @@ describe("member-repository (postgres)", { skip: TEST_DATABASE_URL ? false : "TE
   });
 
   it("converts voice seconds into ticks and keeps the remainder", async () => {
+    const perTick = BigInt(LEVEL_POLICY.voiceXpPerTick);
+
     assert.equal((await repo.addVoiceSeconds(GUILD, "u1", 299)).gainedXp, 0n);
     assert.equal((await repo.getMember(GUILD, "u1")).voiceRemainderSeconds, 299);
 
-    assert.equal((await repo.addVoiceSeconds(GUILD, "u1", 1)).gainedXp, 10n);
+    assert.equal((await repo.addVoiceSeconds(GUILD, "u1", 1)).gainedXp, perTick);
     assert.equal((await repo.getMember(GUILD, "u1")).voiceRemainderSeconds, 0);
 
-    assert.equal((await repo.addVoiceSeconds(GUILD, "u1", 601)).gainedXp, 20n);
+    assert.equal((await repo.addVoiceSeconds(GUILD, "u1", 601)).gainedXp, perTick * 2n);
 
     const member = await repo.getMember(GUILD, "u1");
-    assert.equal(member.voiceXp, 30n);
+    assert.equal(member.voiceXp, perTick * 3n);
     assert.equal(member.voiceRemainderSeconds, 1);
   });
 
@@ -129,8 +133,10 @@ describe("member-repository (postgres)", { skip: TEST_DATABASE_URL ? false : "TE
     await repo.addVoiceSeconds(GUILD, "u1", 300);
     await repo.addVoiceSeconds("guild-other", "u1", 900);
 
-    assert.equal((await repo.getMember(GUILD, "u1")).voiceXp, 10n);
-    assert.equal((await repo.getMember("guild-other", "u1")).voiceXp, 30n);
+    const perTick = BigInt(LEVEL_POLICY.voiceXpPerTick);
+
+    assert.equal((await repo.getMember(GUILD, "u1")).voiceXp, perTick);
+    assert.equal((await repo.getMember("guild-other", "u1")).voiceXp, perTick * 3n);
 
     await pool.query("DELETE FROM level_members WHERE guild_id = $1", ["guild-other"]);
   });

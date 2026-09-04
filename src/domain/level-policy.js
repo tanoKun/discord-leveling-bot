@@ -12,5 +12,5 @@ export const LEVEL_POLICY = Object.freeze({
   textCooldownMaxSeconds: 75,
 
   voiceTickSeconds: 300,
-  voiceXpPerTick: 10
+  voiceXpPerTick: 5
 });
