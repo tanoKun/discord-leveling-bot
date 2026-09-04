@@ -3,7 +3,11 @@ import { after, before, beforeEach, describe, it } from "node:test";
 
 import "./helpers/env.js";
 
-import { voiceSecondsForLevel, voiceXpForSeconds } from "../src/domain/level-math.js";
+import {
+  totalXpForLevel,
+  voiceSecondsForLevel,
+  voiceXpForSeconds
+} from "../src/domain/level-math.js";
 
 /**
  * 実際のPostgreSQLに対する統合テスト。
@@ -110,7 +114,7 @@ describe("member-repository (postgres)", { skip: TEST_DATABASE_URL ? false : "TE
     const member = await repo.getMember(GUILD, "u1");
 
     assert.equal(member.voiceXp, voiceXpForSeconds(seconds));
-    assert.ok(member.voiceXp >= 52n);
+    assert.ok(member.voiceXp >= totalXpForLevel(1));
   });
 
   it("ranks text and voice separately", async () => {

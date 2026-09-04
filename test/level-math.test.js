@@ -13,14 +13,33 @@ import { LEVEL_POLICY } from "../src/domain/level-policy.js";
 const HOUR = 3600;
 
 describe("totalXpForLevel", () => {
-  it("matches the spec table", () => {
+  it("applies the configured multipliers to the ProBot curve", () => {
+    // 素の T(L) = floor(32.8739L^2 + 19.3492L) に対し、
+    // Lv1〜5 は3倍、Lv10以上は1.5倍、その間は線形補間。
+    const base = (level) => Math.floor(32.8739 * level * level + 19.3492 * level);
+    const ratio = (level) => Number(totalXpForLevel(level)) / base(level);
+
     assert.equal(totalXpForLevel(0), 0n);
-    assert.equal(totalXpForLevel(1), 52n);
-    assert.equal(totalXpForLevel(5), 918n);
-    assert.equal(totalXpForLevel(10), 3480n);
-    assert.equal(totalXpForLevel(20), 13536n);
-    assert.equal(totalXpForLevel(50), 83152n);
-    assert.equal(totalXpForLevel(100), 330673n);
+
+    for (const level of [1, 2, 3, 4, 5]) {
+      assert.ok(Math.abs(ratio(level) - 3) < 0.02, `Lv${level} should be about 3x`);
+    }
+
+    for (const level of [10, 20, 50, 100]) {
+      assert.ok(Math.abs(ratio(level) - 1.5) < 0.02, `Lv${level} should be about 1.5x`);
+    }
+
+    // 補間区間は3倍から1.5倍へ単調に下がる
+    assert.ok(ratio(6) < 3 && ratio(6) > ratio(7));
+    assert.ok(ratio(7) > ratio(8) && ratio(8) > ratio(9) && ratio(9) > 1.5);
+  });
+
+  it("matches the expected thresholds", () => {
+    assert.equal(totalXpForLevel(1), 156n);
+    assert.equal(totalXpForLevel(5), 2755n);
+    assert.equal(totalXpForLevel(10), 5221n);
+    assert.equal(totalXpForLevel(20), 20304n);
+    assert.equal(totalXpForLevel(100), 496010n);
   });
 
   it("is strictly increasing", () => {
@@ -53,10 +72,11 @@ describe("levelForTotalXp", () => {
 describe("levelProgress", () => {
   it("splits current and required xp", () => {
     const progress = levelProgress(1000);
+    const level = progress.level;
 
-    assert.equal(progress.level, 5);
-    assert.equal(progress.currentLevelXp, 1000n - totalXpForLevel(5));
-    assert.equal(progress.requiredLevelXp, totalXpForLevel(6) - totalXpForLevel(5));
+    assert.ok(level > 0);
+    assert.equal(progress.currentLevelXp, 1000n - totalXpForLevel(level));
+    assert.equal(progress.requiredLevelXp, totalXpForLevel(level + 1) - totalXpForLevel(level));
   });
 
   it("reports level 0 for unknown users", () => {
@@ -64,7 +84,7 @@ describe("levelProgress", () => {
 
     assert.equal(progress.level, 0);
     assert.equal(progress.currentLevelXp, 0n);
-    assert.equal(progress.requiredLevelXp, 52n);
+    assert.equal(progress.requiredLevelXp, totalXpForLevel(1));
   });
 });
 
@@ -110,7 +130,7 @@ describe("voiceXpForSeconds", () => {
   });
 
   it("is far slower than chat", () => {
-    // 1時間のVCで得られるXPは、チャット1通(15〜25 XP)にも満たない
-    assert.ok(voiceXpForSeconds(HOUR) < BigInt(LEVEL_POLICY.textXpMin));
+    // 1時間のVCで到達するレベルは0のまま(チャットなら数分で入る量)
+    assert.equal(levelForTotalXp(voiceXpForSeconds(HOUR)), 0);
   });
 });

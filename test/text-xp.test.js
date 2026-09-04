@@ -4,6 +4,7 @@ import { describe, it } from "node:test";
 import "./helpers/env.js";
 
 import { isXpEligibleMessage } from "../src/discord/events/message-create.js";
+import { totalXpForLevel } from "../src/domain/level-math.js";
 import { LEVEL_POLICY } from "../src/domain/level-policy.js";
 import { grantTextXp } from "../src/services/xp-service.js";
 import { createFakeRepository } from "./helpers/fake-repository.js";
@@ -127,7 +128,7 @@ describe("grantTextXp", () => {
     let leveledUp = false;
 
     // Level 1 に必要な回数ぶん繰り返す(policyの値が変わっても足りるよう余裕を持たせる)
-    const attempts = Math.ceil(52 / LEVEL_POLICY.textXpMin) + 1;
+    const attempts = Math.ceil(Number(totalXpForLevel(1)) / LEVEL_POLICY.textXpMin) + 1;
 
     for (let i = 0; i < attempts; i += 1) {
       const result = await grantTextXp(GUILD, USER, { now, repo });

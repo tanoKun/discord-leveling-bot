@@ -7,7 +7,7 @@ import { PermissionFlagsBits } from "discord.js";
 
 import * as levelReset from "../src/discord/commands/level-reset.js";
 import * as levelShow from "../src/discord/commands/level-show.js";
-import { levelProgress } from "../src/domain/level-math.js";
+import { levelForTotalXp, levelProgress, totalXpForLevel } from "../src/domain/level-math.js";
 import { getProfile } from "../src/services/xp-service.js";
 import { createFakeRepository } from "./helpers/fake-repository.js";
 
@@ -105,10 +105,11 @@ describe("/level show", () => {
     assert.equal(renderedWith.displayName, "user-u1 (nick)");
 
     // テキストとVCはそれぞれ独立したレベルとして渡される
-    assert.equal(renderedWith.text.level, 9);
+    assert.equal(renderedWith.text.level, levelForTotalXp(3100n));
     assert.equal(renderedWith.text.rank, 4);
-    assert.equal(renderedWith.voice.level, 5);
+    assert.equal(renderedWith.voice.level, levelForTotalXp(1100n));
     assert.equal(renderedWith.voice.rank, 7);
+    assert.ok(renderedWith.text.level !== renderedWith.voice.level);
     assert.equal(renderedWith.voice.seconds, 42 * 3600);
   });
 
@@ -153,7 +154,7 @@ describe("/level show", () => {
 
     assert.equal(text.name, "テキスト");
     assert.match(text.value, /Level 0/);
-    assert.match(text.value, /0 \/ 52 XP/);
+    assert.match(text.value, new RegExp(`0 / ${totalXpForLevel(1)} XP`));
     assert.match(text.value, /Rank -/);
     assert.equal(voice.name, "ボイス");
     assert.match(voice.value, /Level 0/);
@@ -204,9 +205,9 @@ describe("/level show", () => {
     const [text, voice] = embed.fields;
 
     assert.equal(reply.files, undefined);
-    assert.match(text.value, /Level 9/);
+    assert.ok(text.value.includes(`**Level ${levelForTotalXp(3100n)}**`));
     assert.match(text.value, /Rank #4/);
-    assert.match(voice.value, /Level 5/);
+    assert.ok(voice.value.includes(`**Level ${levelForTotalXp(1100n)}**`));
     assert.match(voice.value, /Rank #7/);
     assert.match(voice.value, /滞在 42h 0m/);
   });
@@ -419,7 +420,7 @@ describe("getProfile", () => {
       assert.equal(part.level, 0);
       assert.equal(part.rank, null);
       assert.equal(part.currentLevelXp, 0n);
-      assert.equal(part.requiredLevelXp, 52n);
+      assert.equal(part.requiredLevelXp, totalXpForLevel(1));
     }
   });
 

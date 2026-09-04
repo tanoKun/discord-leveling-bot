@@ -8,6 +8,48 @@ import { LEVEL_POLICY } from "./level-policy.js";
  * BigIntで厳密に計算する。
  */
 
+const {
+  curveEarlyMaxLevel: EARLY_MAX,
+  curveEarlyMultiplier: EARLY_MULTIPLIER,
+  curveLateMinLevel: LATE_MIN,
+  curveLateMultiplier: LATE_MULTIPLIER
+} = LEVEL_POLICY;
+
+// 倍率は 1/1000 単位の整数で扱う(BigIntで厳密に計算するため)
+const EARLY_SCALED = BigInt(Math.round(EARLY_MULTIPLIER * 1000));
+const LATE_SCALED = BigInt(Math.round(LATE_MULTIPLIER * 1000));
+
+/** Level L に掛ける倍率(1/1000単位)。EARLY_MAX〜LATE_MIN は線形補間する。 */
+function multiplierScaled(level) {
+  if (level <= EARLY_MAX) {
+    return EARLY_SCALED;
+  }
+
+  if (level >= LATE_MIN) {
+    return LATE_SCALED;
+  }
+
+  const span = BigInt(LATE_MIN - EARLY_MAX);
+  const step = BigInt(level - EARLY_MAX);
+
+  return EARLY_SCALED - ((EARLY_SCALED - LATE_SCALED) * step) / span;
+}
+
+/** 連続値のレベルに対する倍率(VCの換算で使う) */
+function multiplierFor(level) {
+  if (level <= EARLY_MAX) {
+    return EARLY_MULTIPLIER;
+  }
+
+  if (level >= LATE_MIN) {
+    return LATE_MULTIPLIER;
+  }
+
+  const ratio = (level - EARLY_MAX) / (LATE_MIN - EARLY_MAX);
+
+  return EARLY_MULTIPLIER - (EARLY_MULTIPLIER - LATE_MULTIPLIER) * ratio;
+}
+
 /** Level L に到達するために必要な累計XP */
 export function totalXpForLevel(level) {
   const l = BigInt(level);
@@ -16,7 +58,7 @@ export function totalXpForLevel(level) {
     throw new RangeError("level must be >= 0");
   }
 
-  return (328739n * l * l + 193492n * l) / 10000n;
+  return ((328739n * l * l + 193492n * l) * multiplierScaled(Number(level))) / 10000000n;
 }
 
 /** T(L) <= totalXp を満たす最大の L */
@@ -92,7 +134,17 @@ export function voiceLevelForHours(hours) {
   return (-VOICE_B + Math.sqrt(VOICE_B * VOICE_B + 4 * VOICE_A * hours)) / (2 * VOICE_A);
 }
 
-/** VC滞在秒数の累計に対応するVC XP */
+/** VC滞在時間(時間)でLevel Lに到達するのに必要な時間 */
+function voiceHoursForLevel(level) {
+  return VOICE_A * level * level + VOICE_B * level;
+}
+
+/**
+ * VC滞在秒数の累計に対応するVC XP。
+ *
+ * 整数レベル間を線形補間する。こうするとレベルカーブの形に関わらず
+ * 「Level L に到達する時間」が目安どおりになり、かつXPが逆行しない。
+ */
 export function voiceXpForSeconds(seconds) {
   const total = Math.max(0, Math.floor(Number(seconds)));
 
@@ -100,10 +152,18 @@ export function voiceXpForSeconds(seconds) {
     return 0n;
   }
 
-  const level = voiceLevelForHours(total / 3600);
-  const xp = (328739 * level * level + 193492 * level) / 10000;
+  const hours = total / 3600;
+  const level = Math.floor(voiceLevelForHours(hours));
 
-  return BigInt(Math.floor(xp));
+  const fromHours = voiceHoursForLevel(level);
+  const toHours = voiceHoursForLevel(level + 1);
+
+  const fromXp = totalXpForLevel(level);
+  const toXp = totalXpForLevel(level + 1);
+
+  const ratio = Math.min(1, Math.max(0, (hours - fromHours) / (toHours - fromHours)));
+
+  return fromXp + BigInt(Math.floor(Number(toXp - fromXp) * ratio));
 }
 
 /** Level L にVCだけで到達するのに必要な滞在秒数(目安表示・テスト用) */

@@ -11,6 +11,14 @@ export const LEVEL_POLICY = Object.freeze({
   textCooldownMinSeconds: 30,
   textCooldownMaxSeconds: 70,
 
+  // ProBot風カーブへ掛ける必要XPの倍率。
+  // Lv1〜5 は earlyMultiplier、Lv10以上は lateMultiplier、
+  // その間は線形に補間する。
+  curveEarlyMaxLevel: 5,
+  curveEarlyMultiplier: 3,
+  curveLateMinLevel: 10,
+  curveLateMultiplier: 1.5,
+
   // VC滞在をDBへ書き込む単位(この秒数たまるごとに確定させる)
   voiceTickSeconds: 300,
 
