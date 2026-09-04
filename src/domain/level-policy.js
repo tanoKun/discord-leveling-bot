@@ -5,11 +5,11 @@
 export const LEVEL_POLICY = Object.freeze({
   id: "probot-like-v1",
 
-  textXpMin: 15,
-  textXpMax: 25,
+  textXpMin: 8,
+  textXpMax: 8,
 
-  textCooldownMinSeconds: 55,
-  textCooldownMaxSeconds: 75,
+  textCooldownMinSeconds: 30,
+  textCooldownMaxSeconds: 70,
 
   // VC滞在をDBへ書き込む単位(この秒数たまるごとに確定させる)
   voiceTickSeconds: 300,

@@ -44,7 +44,7 @@ describe("text xp eligibility", () => {
 });
 
 describe("grantTextXp", () => {
-  it("grants 15-25 xp on the first message", async () => {
+  it("grants the configured xp on the first message", async () => {
     const repo = createFakeRepository();
 
     for (let attempt = 0; attempt < 50; attempt += 1) {
@@ -94,9 +94,13 @@ describe("grantTextXp", () => {
 
     const first = await grantTextXp(GUILD, USER, { now: start, repo });
     const expected = first.nextTextXpAt.getTime();
+    const cooldownMs = expected - start.getTime();
 
-    for (const offset of [15_000, 25_000, 40_000]) {
-      await grantTextXp(GUILD, USER, { now: new Date(start.getTime() + offset), repo });
+    // Cooldownの長さはランダムなので、その窓の内側で連投する
+    for (const ratio of [0.25, 0.5, 0.9]) {
+      const now = new Date(start.getTime() + Math.floor(cooldownMs * ratio));
+
+      assert.equal(await grantTextXp(GUILD, USER, { now, repo }), null);
     }
 
     const row = await repo.getMember(GUILD, USER);
@@ -122,7 +126,10 @@ describe("grantTextXp", () => {
     let now = new Date("2026-01-01T14:00:00Z");
     let leveledUp = false;
 
-    for (let i = 0; i < 5; i += 1) {
+    // Level 1 に必要な回数ぶん繰り返す(policyの値が変わっても足りるよう余裕を持たせる)
+    const attempts = Math.ceil(52 / LEVEL_POLICY.textXpMin) + 1;
+
+    for (let i = 0; i < attempts; i += 1) {
       const result = await grantTextXp(GUILD, USER, { now, repo });
 
       if (result?.leveledUp) {
@@ -134,6 +141,6 @@ describe("grantTextXp", () => {
       now = new Date(now.getTime() + 120_000);
     }
 
-    assert.ok(leveledUp, "level 1 should be reached within 5 messages");
+    assert.ok(leveledUp, `level 1 should be reached within ${attempts} messages`);
   });
 });
