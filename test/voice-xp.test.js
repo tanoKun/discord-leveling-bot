@@ -3,13 +3,12 @@ import { describe, it } from "node:test";
 
 import "./helpers/env.js";
 
-import { LEVEL_POLICY } from "../src/domain/level-policy.js";
+import { voiceSecondsForLevel } from "../src/domain/level-math.js";
 import { addVoiceSeconds } from "../src/services/xp-service.js";
 import { VoiceTracker, isEligibleVoiceState } from "../src/services/voice-tracker.js";
+import { levelForTotalXp } from "../src/domain/level-math.js";
 import { createChannel, createGuild, joinChannel, leaveChannel } from "./helpers/fake-discord.js";
 import { createFakeRepository } from "./helpers/fake-repository.js";
-
-const XP_PER_TICK = BigInt(LEVEL_POLICY.voiceXpPerTick);
 
 function createXpStub(repo) {
   return {
@@ -119,51 +118,47 @@ describe("VoiceTracker", () => {
     return { channel, first, second };
   }
 
-  it("299 seconds => 0 xp", async () => {
+  it("stores voice seconds even below the write threshold", async () => {
     const { repo, clock, tracker } = setup();
     await joinPair(tracker);
 
     clock.advanceSeconds(299);
     await tracker.checkpointAll();
 
+    // 書き込み単位に満たないうちはDBへ確定させない
     assert.equal(await repo.getMember("guild-1", "u1"), null);
+
+    clock.advanceSeconds(1);
+    await tracker.checkpointAll();
+
+    assert.equal((await repo.getMember("guild-1", "u1")).voiceSeconds, 300);
   });
 
-  it("300 seconds => 1 tick of xp", async () => {
+  it("converts accumulated seconds into xp with the voice formula", async () => {
     const { repo, clock, tracker } = setup();
     await joinPair(tracker);
 
-    clock.advanceSeconds(300);
+    const secondsForLevel1 = voiceSecondsForLevel(1);
+
+    clock.advanceSeconds(secondsForLevel1);
     await tracker.checkpointAll();
 
     const member = await repo.getMember("guild-1", "u1");
-    assert.equal(member.voiceXp, XP_PER_TICK);
-    assert.equal(member.voiceRemainderSeconds, 0);
+
+    assert.equal(member.voiceSeconds, secondsForLevel1);
+    assert.equal(levelForTotalXp(member.totalXp), 1);
   });
 
-  it("601 seconds => 2 ticks of xp and remainder 1", async () => {
+  it("keeps counting across checkpoints", async () => {
     const { repo, clock, tracker } = setup();
     await joinPair(tracker);
 
-    clock.advanceSeconds(601);
-    await tracker.checkpointAll();
-
-    const member = await repo.getMember("guild-1", "u1");
-    assert.equal(member.voiceXp, XP_PER_TICK * 2n);
-    assert.equal(member.voiceRemainderSeconds, 1);
-  });
-
-  it("keeps the remainder across checkpoints", async () => {
-    const { repo, clock, tracker } = setup();
-    await joinPair(tracker);
-
-    for (let i = 0; i < 10; i += 1) {
+    for (let i = 0; i < 120; i += 1) {
       clock.advanceSeconds(30);
       await tracker.checkpointAll();
     }
 
-    const member = await repo.getMember("guild-1", "u1");
-    assert.equal(member.voiceXp, XP_PER_TICK);
+    assert.equal((await repo.getMember("guild-1", "u1")).voiceSeconds, 3600);
   });
 
   it("does not accumulate while alone", async () => {
@@ -188,21 +183,21 @@ describe("VoiceTracker", () => {
     const left = leaveChannel(channel, second);
     await tracker.handleVoiceStateUpdate(second, left);
 
-    // 残り時間は端数として保存され、以降は積算されない
+    // 滞在していた分は保存され、以降は積算されない
     assert.equal(tracker.sessions.size, 0);
-    assert.equal((await repo.getMember("guild-1", "u1")).voiceRemainderSeconds, 120);
+    assert.equal((await repo.getMember("guild-1", "u1")).voiceSeconds, 120);
 
     clock.advanceSeconds(600);
     await tracker.checkpointAll();
 
-    assert.equal((await repo.getMember("guild-1", "u1")).voiceXp, 0n);
+    assert.equal((await repo.getMember("guild-1", "u1")).voiceSeconds, 120);
   });
 
   it("notifies once when several levels are passed", async () => {
     const { clock, tracker, levelUps } = setup();
     await joinPair(tracker);
 
-    clock.advanceSeconds(300 * 100);
+    clock.advanceSeconds(voiceSecondsForLevel(3));
     await tracker.checkpointAll();
 
     // 複数レベルを一度に通過しても、ユーザーごとの通知は1回
@@ -222,6 +217,7 @@ describe("VoiceTracker", () => {
     clock.advanceSeconds(1);
     await tracker.checkpointAll();
 
+    // リセット前の299秒は破棄され、計測が最初からやり直しになる
     assert.equal(await repo.getMember("guild-1", "u1"), null);
   });
 
@@ -232,6 +228,6 @@ describe("VoiceTracker", () => {
     clock.advanceSeconds(90);
     await tracker.stop();
 
-    assert.equal((await repo.getMember("guild-1", "u1")).voiceRemainderSeconds, 90);
+    assert.equal((await repo.getMember("guild-1", "u1")).voiceSeconds, 90);
   });
 });

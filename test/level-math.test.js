@@ -4,12 +4,13 @@ import { describe, it } from "node:test";
 import {
   levelForTotalXp,
   levelProgress,
-  splitVoiceSeconds,
-  totalXpForLevel
+  totalXpForLevel,
+  voiceSecondsForLevel,
+  voiceXpForSeconds
 } from "../src/domain/level-math.js";
 import { LEVEL_POLICY } from "../src/domain/level-policy.js";
 
-const XP_PER_TICK = LEVEL_POLICY.voiceXpPerTick;
+const HOUR = 3600;
 
 describe("totalXpForLevel", () => {
   it("matches the spec table", () => {
@@ -67,36 +68,49 @@ describe("levelProgress", () => {
   });
 });
 
-describe("splitVoiceSeconds", () => {
-  it("299 seconds => no tick", () => {
-    assert.deepEqual(splitVoiceSeconds(0, 299), {
-      ticks: 0,
-      gainedXp: 0,
-      remainderSeconds: 299
-    });
+describe("voiceXpForSeconds", () => {
+  it("gives no xp without voice time", () => {
+    assert.equal(voiceXpForSeconds(0), 0n);
+    assert.equal(voiceXpForSeconds(-100), 0n);
   });
 
-  it("300 seconds => 1 tick", () => {
-    assert.deepEqual(splitVoiceSeconds(0, 300), {
-      ticks: 1,
-      gainedXp: XP_PER_TICK,
-      remainderSeconds: 0
-    });
+  it("reaches level 1 at the configured hours", () => {
+    const hours = LEVEL_POLICY.voiceHoursForLevel1;
+
+    assert.equal(levelForTotalXp(voiceXpForSeconds(hours * HOUR)), 1);
+    // 序盤は 1時間あたり約2 XP しか入らないため、境界の判定には余裕を持たせる
+    assert.equal(levelForTotalXp(voiceXpForSeconds(hours * HOUR - HOUR)), 0);
   });
 
-  it("601 seconds => 2 ticks with remainder 1", () => {
-    assert.deepEqual(splitVoiceSeconds(0, 601), {
-      ticks: 2,
-      gainedXp: XP_PER_TICK * 2,
-      remainderSeconds: 1
-    });
+  it("reaches level 10 at the configured hours", () => {
+    const hours = LEVEL_POLICY.voiceHoursForLevel10;
+
+    assert.equal(levelForTotalXp(voiceXpForSeconds(hours * HOUR)), 10);
+    assert.equal(levelForTotalXp(voiceXpForSeconds(hours * HOUR - 600)), 9);
   });
 
-  it("keeps the stored remainder", () => {
-    assert.deepEqual(splitVoiceSeconds(299, 1), {
-      ticks: 1,
-      gainedXp: XP_PER_TICK,
-      remainderSeconds: 0
-    });
+  it("matches voiceSecondsForLevel", () => {
+    for (const level of [1, 5, 10, 20, 50, 100]) {
+      const seconds = voiceSecondsForLevel(level);
+
+      assert.equal(levelForTotalXp(voiceXpForSeconds(seconds)), level);
+      assert.equal(levelForTotalXp(voiceXpForSeconds(seconds - 3600)), level - 1);
+    }
+  });
+
+  it("never decreases as voice time grows", () => {
+    let previous = 0n;
+
+    for (let minutes = 0; minutes <= 60 * 400; minutes += 7) {
+      const xp = voiceXpForSeconds(minutes * 60);
+
+      assert.ok(xp >= previous, `xp decreased at ${minutes} minutes`);
+      previous = xp;
+    }
+  });
+
+  it("is far slower than chat", () => {
+    // 1時間のVCで得られるXPは、チャット1通(15〜25 XP)にも満たない
+    assert.ok(voiceXpForSeconds(HOUR) < BigInt(LEVEL_POLICY.textXpMin));
   });
 });

@@ -65,15 +65,50 @@ export function levelProgress(totalXp) {
 }
 
 /**
- * VC滞在秒数を 300秒(=1 tick)単位のXPと端数へ分解する。
+ * VCのXPはチャットとは別の式で求める。
+ *
+ * 目安として指定した「VCだけでLevel Lに到達するまでの時間」
+ *
+ *   hours(L) = VOICE_A * L^2 + VOICE_B * L
+ *
+ * を満たすように、滞在秒数からXPへ変換する。
+ * hours(1) と hours(10) の2点から係数を決める。
  */
-export function splitVoiceSeconds(remainderSeconds, addedSeconds, policy = LEVEL_POLICY) {
-  const total = Math.max(0, Math.floor(remainderSeconds)) + Math.max(0, Math.floor(addedSeconds));
-  const ticks = Math.floor(total / policy.voiceTickSeconds);
+const VOICE_A = (LEVEL_POLICY.voiceHoursForLevel10 - 10 * LEVEL_POLICY.voiceHoursForLevel1) / 90;
+const VOICE_B = LEVEL_POLICY.voiceHoursForLevel1 - VOICE_A;
 
-  return {
-    ticks,
-    gainedXp: ticks * policy.voiceXpPerTick,
-    remainderSeconds: total % policy.voiceTickSeconds
-  };
+if (!(VOICE_A > 0) || !(VOICE_B > 0)) {
+  throw new RangeError(
+    "voiceHoursForLevel10 must be between 10x and 100x of voiceHoursForLevel1"
+  );
+}
+
+/** VC滞在時間(時間)に相当する連続値のレベル */
+export function voiceLevelForHours(hours) {
+  if (hours <= 0) {
+    return 0;
+  }
+
+  return (-VOICE_B + Math.sqrt(VOICE_B * VOICE_B + 4 * VOICE_A * hours)) / (2 * VOICE_A);
+}
+
+/** VC滞在秒数の累計に対応するVC XP */
+export function voiceXpForSeconds(seconds) {
+  const total = Math.max(0, Math.floor(Number(seconds)));
+
+  if (total === 0) {
+    return 0n;
+  }
+
+  const level = voiceLevelForHours(total / 3600);
+  const xp = (328739 * level * level + 193492 * level) / 10000;
+
+  return BigInt(Math.floor(xp));
+}
+
+/** Level L にVCだけで到達するのに必要な滞在秒数(目安表示・テスト用) */
+export function voiceSecondsForLevel(level) {
+  const l = Number(level);
+
+  return Math.round((VOICE_A * l * l + VOICE_B * l) * 3600);
 }

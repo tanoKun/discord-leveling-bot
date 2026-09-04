@@ -1,4 +1,4 @@
-import { splitVoiceSeconds } from "../domain/level-math.js";
+import { voiceXpForSeconds } from "../domain/level-math.js";
 import { pool, withTransaction } from "./pool.js";
 
 function toMember(row) {
@@ -16,7 +16,7 @@ function toMember(row) {
     voiceXp,
     totalXp: textXp + voiceXp,
     nextTextXpAt: row.next_text_xp_at,
-    voiceRemainderSeconds: row.voice_remainder_seconds
+    voiceSeconds: Number(row.voice_seconds)
   };
 }
 
@@ -29,7 +29,7 @@ export function emptyMember(guildId, userId) {
     voiceXp: 0n,
     totalXp: 0n,
     nextTextXpAt: null,
-    voiceRemainderSeconds: 0,
+    voiceSeconds: 0,
     exists: false
   };
 }
@@ -127,31 +127,30 @@ export async function grantTextXp(guildId, userId, { xp, cooldownSeconds, now = 
 
 /**
  * VC滞在秒数を反映する。
- * remainder + seconds から 300秒単位でXPを確定し、余りを保持する。
+ * 秒数を累計し、そこからVC XPを算出して保存する。
  */
 export async function addVoiceSeconds(guildId, userId, seconds) {
   return withTransaction(async (client) => {
     const member = await lockMember(client, guildId, userId);
 
-    const split = splitVoiceSeconds(member.voiceRemainderSeconds, seconds);
-    const remainder = split.remainderSeconds;
-    const gainedXp = BigInt(split.gainedXp);
+    const totalSeconds = member.voiceSeconds + Math.max(0, Math.floor(seconds));
+    const voiceXp = voiceXpForSeconds(totalSeconds);
 
     const result = await client.query(
       `UPDATE level_members
-       SET voice_xp = voice_xp + $3,
-           voice_remainder_seconds = $4,
+       SET voice_xp = $3,
+           voice_seconds = $4,
            updated_at = NOW()
        WHERE guild_id = $1 AND user_id = $2
        RETURNING *`,
-      [guildId, userId, String(gainedXp), remainder]
+      [guildId, userId, String(voiceXp), String(totalSeconds)]
     );
 
     const updated = toMember(result.rows[0]);
 
     return {
-      gainedXp,
-      remainderSeconds: remainder,
+      gainedXp: voiceXp - member.voiceXp,
+      voiceSeconds: totalSeconds,
       totalXpBefore: member.totalXp,
       totalXpAfter: updated.totalXp
     };
@@ -168,7 +167,7 @@ export async function resetMember(guildId, userId) {
        SET text_xp = 0,
            voice_xp = 0,
            next_text_xp_at = NULL,
-           voice_remainder_seconds = 0,
+           voice_seconds = 0,
            updated_at = NOW()
        WHERE guild_id = $1 AND user_id = $2`,
       [guildId, userId]

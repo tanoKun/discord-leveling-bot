@@ -228,6 +228,7 @@ export class VoiceTracker {
       return;
     }
 
+    // 書き込み回数を抑えるため、一定秒数たまるまではメモリ上に保持する
     const enough = session.accumulatedSeconds >= LEVEL_POLICY.voiceTickSeconds;
 
     if (!enough && !(force && session.accumulatedSeconds > 0)) {

@@ -1,4 +1,4 @@
-import { splitVoiceSeconds } from "../../src/domain/level-math.js";
+import { voiceXpForSeconds } from "../../src/domain/level-math.js";
 
 /**
  * member-repository と同じ契約を持つインメモリ実装。
@@ -20,7 +20,7 @@ export function createFakeRepository() {
         textXp: 0n,
         voiceXp: 0n,
         nextTextXpAt: null,
-        voiceRemainderSeconds: 0
+        voiceSeconds: 0
       });
     }
 
@@ -48,7 +48,7 @@ export function createFakeRepository() {
         voiceXp: 0n,
         totalXp: 0n,
         nextTextXpAt: null,
-        voiceRemainderSeconds: 0,
+        voiceSeconds: 0,
         exists: false
       };
     },
@@ -109,14 +109,14 @@ export function createFakeRepository() {
         const row = ensure(guildId, userId);
         const totalXpBefore = row.textXp + row.voiceXp;
 
-        const split = splitVoiceSeconds(row.voiceRemainderSeconds, seconds);
+        const previousXp = row.voiceXp;
 
-        row.voiceXp += BigInt(split.gainedXp);
-        row.voiceRemainderSeconds = split.remainderSeconds;
+        row.voiceSeconds += Math.max(0, Math.floor(seconds));
+        row.voiceXp = voiceXpForSeconds(row.voiceSeconds);
 
         return {
-          gainedXp: BigInt(split.gainedXp),
-          remainderSeconds: split.remainderSeconds,
+          gainedXp: row.voiceXp - previousXp,
+          voiceSeconds: row.voiceSeconds,
           totalXpBefore,
           totalXpAfter: row.textXp + row.voiceXp
         };
@@ -130,7 +130,7 @@ export function createFakeRepository() {
         row.textXp = 0n;
         row.voiceXp = 0n;
         row.nextTextXpAt = null;
-        row.voiceRemainderSeconds = 0;
+        row.voiceSeconds = 0;
       });
     }
   };

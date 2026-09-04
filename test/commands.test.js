@@ -327,13 +327,13 @@ describe("/level reset", () => {
     assert.equal(resetCalls, 0);
   });
 
-  it("resets xp, cooldown and voice remainder on confirmation", async () => {
+  it("resets xp, cooldown and voice time on confirmation", async () => {
     const caller = createUser("u1");
     const target = createUser("u2");
     const repo = createFakeRepository();
 
     await repo.grantTextXp(GUILD, target.id, { xp: 100, cooldownSeconds: 60 });
-    await repo.addVoiceSeconds(GUILD, target.id, 400);
+    await repo.addVoiceSeconds(GUILD, target.id, 36000);
 
     const interaction = createResetInteraction({
       caller,
@@ -350,7 +350,7 @@ describe("/level reset", () => {
     assert.equal(member.textXp, 0n);
     assert.equal(member.voiceXp, 0n);
     assert.equal(member.nextTextXpAt, null);
-    assert.equal(member.voiceRemainderSeconds, 0);
+    assert.equal(member.voiceSeconds, 0);
     assert.deepEqual(interaction.state.resetSessions, [[GUILD, target.id]]);
     assert.match(interaction.state.edits.at(-1).content, /リセットしました/);
   });
@@ -387,8 +387,8 @@ describe("getProfile", () => {
   it("ranks members by total xp", async () => {
     const repo = createFakeRepository();
 
-    await repo.addVoiceSeconds(GUILD, "low", 300);
-    await repo.addVoiceSeconds(GUILD, "high", 3000);
+    await repo.addVoiceSeconds(GUILD, "low", 3600);
+    await repo.addVoiceSeconds(GUILD, "high", 36000);
 
     assert.equal((await getProfile(GUILD, "high", { repo })).rank, 1);
     assert.equal((await getProfile(GUILD, "low", { repo })).rank, 2);
